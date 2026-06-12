@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Compiled output (standalone binary)
+pgmigrate
+
+# e2e artifacts (local binary built inside e2e/)
+e2e/pgmigrate
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test outputs
+coverage/

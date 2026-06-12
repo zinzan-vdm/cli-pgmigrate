@@ -1,0 +1,4 @@
+REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM e2e_reader;
+REVOKE USAGE ON SCHEMA public FROM e2e_reader;
+REVOKE CONNECT ON DATABASE pgmigrate_e2e FROM e2e_reader;
+DROP ROLE e2e_reader;

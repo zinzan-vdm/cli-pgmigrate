@@ -1,0 +1,6 @@
+CREATE TABLE users (
+    id    SERIAL PRIMARY KEY,
+    email TEXT NOT NULL
+);
+
+GRANT SELECT ON users TO PUBLIC;

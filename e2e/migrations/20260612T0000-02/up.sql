@@ -1,0 +1,4 @@
+CREATE ROLE e2e_reader WITH LOGIN PASSWORD 'e2e_pass';
+GRANT CONNECT ON DATABASE pgmigrate_e2e TO e2e_reader;
+GRANT USAGE ON SCHEMA public TO e2e_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO e2e_reader;
