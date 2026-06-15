@@ -41,8 +41,6 @@ export namespace Config {
       ];
     }
 
-    console.log({ configPath, raw, parsed });
-
     const tableName: string =
       parsed?.tracking?.["table-name"] ?? DEFAULT_TABLE_NAME;
 
