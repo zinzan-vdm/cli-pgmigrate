@@ -1,6 +1,6 @@
 {
   "name": "pgmigrate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PostgreSQL migration tool — versioned DDL/DCL/DML with dirty-flag safety and advisory locks.",
   "type": "module",
   "license": "UNLICENSED",

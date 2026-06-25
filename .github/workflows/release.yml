@@ -26,9 +26,9 @@ jobs:
     strategy:
       matrix:
         target:
-          - bun-linux-x64
-          - bun-darwin-x64
-          - bun-windows-x64
+          - bun-linux-x64-baseline
+          - bun-darwin-x64-baseline
+          - bun-windows-x64-baseline
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +39,9 @@ jobs:
       - name: Build for ${{ matrix.target }}
         run: |
           case "${{ matrix.target }}" in
-            bun-linux-x64)   OUT="pgmigrate-linux-x64" ;;
-            bun-darwin-x64)  OUT="pgmigrate-darwin-x64" ;;
-            bun-windows-x64) OUT="pgmigrate-windows-x64.exe" ;;
+            bun-linux-x64-baseline)   OUT="pgmigrate-linux-x64" ;;
+            bun-darwin-x64-baseline)  OUT="pgmigrate-darwin-x64" ;;
+            bun-windows-x64-baseline) OUT="pgmigrate-windows-x64.exe" ;;
           esac
           bun build --compile --target="${{ matrix.target }}" ./index.ts --outfile "$OUT"
       - uses: actions/upload-artifact@v4
