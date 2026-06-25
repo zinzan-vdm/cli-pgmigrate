@@ -17,7 +17,7 @@ export namespace Config {
     try {
       const content = await deps.fs.readFile(configPath);
       raw = content;
-    } catch (_err) {
+    } catch {
       // File not found — return defaults
       return [{ tracking: { tableName: DEFAULT_TABLE_NAME } }, undefined];
     }

@@ -10,17 +10,17 @@ Built with [Bun](https://bun.sh), compiled to a single binary.
 
 Pinned versions for reproducible development:
 
-| Tool | Version | Required | Notes |
-|------|---------|----------|-------|
-| [Bun](https://bun.sh) | `1.3.14` | ✅ | Runtime, test runner, compiler |
-| [TypeScript](https://www.typescriptlang.org) | `5.9.3` | dev | Type checking (`bun x tsc`) |
-| [postgres.js](https://github.com/porsager/postgres) | `3.4.8` | ✅ | PostgreSQL driver |
-| [js-yaml](https://github.com/nodeca/js-yaml) | `4.1.0` | ✅ | Config file parsing |
-| [ESLint](https://eslint.org) | `9.39.2` | dev | Linting |
-| [Prettier](https://prettier.io) | `3.8.1` | dev | Formatting |
-| [Docker](https://docker.com) | `29.3.1` | e2e | Container runtime for end-to-end tests |
-| [PostgreSQL](https://postgresql.org) | `16` | e2e | Target database (any 14+ works) |
-| [just](https://github.com/casey/just) | `1.40.0` | optional | Task runner (`just test`, `just e2e`) |
+| Tool                                                | Version  | Required | Notes                                  |
+| --------------------------------------------------- | -------- | -------- | -------------------------------------- |
+| [Bun](https://bun.sh)                               | `1.3.14` | ✅       | Runtime, test runner, compiler         |
+| [TypeScript](https://www.typescriptlang.org)        | `5.9.3`  | dev      | Type checking (`bun x tsc`)            |
+| [postgres.js](https://github.com/porsager/postgres) | `3.4.8`  | ✅       | PostgreSQL driver                      |
+| [js-yaml](https://github.com/nodeca/js-yaml)        | `4.1.0`  | ✅       | Config file parsing                    |
+| [ESLint](https://eslint.org)                        | `9.39.2` | dev      | Linting                                |
+| [Prettier](https://prettier.io)                     | `3.8.1`  | dev      | Formatting                             |
+| [Docker](https://docker.com)                        | `29.3.1` | e2e      | Container runtime for end-to-end tests |
+| [PostgreSQL](https://postgresql.org)                | `16`     | e2e      | Target database (any 14+ works)        |
+| [just](https://github.com/casey/just)               | `1.40.0` | optional | Task runner (`just test`, `just e2e`)  |
 
 Runtime dependencies (`postgres`, `js-yaml`) are locked in `bun.lock`. Dev tooling is pinned in `package.json`.
 
@@ -32,16 +32,17 @@ Runtime dependencies (`postgres`, `js-yaml`) are locked in `bun.lock`. Dev tooli
 pgmigrate [options] <database_uri>
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--to <version>` | — | Target version (`YYYYMMDDTHHMM-SS`) |
-| `--from <version>` | tracking table | Current version |
-| `--source <dir>` | `.` | Version directory root |
-| `--config <file>` | `<source>/config.yml` | Config YAML path |
-| `--force` | — | Set version in tracking table, no SQL |
-| `--help`, `-h` | — | Show help |
+| Option             | Default               | Description                           |
+| ------------------ | --------------------- | ------------------------------------- |
+| `--to <version>`   | —                     | Target version (`YYYYMMDDTHHMM-SS`)   |
+| `--from <version>` | tracking table        | Current version                       |
+| `--source <dir>`   | `.`                   | Version directory root                |
+| `--config <file>`  | `<source>/config.yml` | Config YAML path                      |
+| `--force`          | —                     | Set version in tracking table, no SQL |
+| `--help`, `-h`     | —                     | Show help                             |
 
 Direction is inferred from `--from` vs `--to`:
+
 - `from < to` → forward, runs `up.sql`
 - `from > to` → backward, runs `down.sql`
 
@@ -90,7 +91,7 @@ Optional `config.yml` alongside the source directory:
 
 ```yaml
 tracking:
-  table-name: _migrations   # default
+  table-name: _migrations # default
 ```
 
 Missing or empty config falls back to defaults.
@@ -147,6 +148,7 @@ Crash between 4a and 4c leaves `dirty=true` as the latest row. All future runs a
 ### Force recovery (`--force`)
 
 Sets version in tracking table without executing any SQL — mirrors golang-migrate's `force VERSION`. Use when:
+
 - A migration failed mid-file and you manually repaired the schema
 - The database is dirty and you need to reset the tracking state
 
@@ -175,12 +177,12 @@ Produces a standalone ~91 MB binary. No runtime dependencies.
 
 ### Dev commands
 
-| Command | Action |
-|---------|--------|
-| `bun test` | 52 unit tests |
-| `bun x tsc --noEmit` | Type check |
-| `bun x eslint .` | Lint |
-| `bun x prettier --check .` | Format check |
+| Command                    | Action        |
+| -------------------------- | ------------- |
+| `bun test`                 | 52 unit tests |
+| `bun x tsc --noEmit`       | Type check    |
+| `bun x eslint .`           | Lint          |
+| `bun x prettier --check .` | Format check  |
 
 ## End-to-end tests
 

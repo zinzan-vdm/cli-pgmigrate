@@ -11,8 +11,16 @@
 
 import { $ } from "bun";
 import postgres from "postgres";
+import type { Sql } from "postgres";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// --- Helpers ---------------------------------------------------------------
+
+/** Cast the first row of a postgres.js result to a specific type */
+function first<T>(rows: Record<string, unknown>[]): T {
+  return rows[0] as unknown as T;
+}
 
 // --- Paths ----------------------------------------------------------------
 
@@ -23,36 +31,35 @@ const CONTAINER = "pgmigrate-e2e";
 const PORT = "5432";
 const PG_USER = "pg";
 const PG_DB = "pgmigrate_e2e";
-const PG_URI = `postgres://${PG_USER}@localhost:${PORT}/${PG_DB}`;
 const PG_FRESH_DB = "pgmigrate_fresh";
+const PG_URI = `postgres://${PG_USER}@localhost:${PORT}/${PG_DB}`;
 
-// --- Test harness ---------------------------------------------------------
+// --- Test helpers ---------------------------------------------------------
 
 let passCount = 0;
 let failCount = 0;
 
-function pass(label: string) {
-  console.log(`  PASS  ${label}`);
+function pass(msg: string): void {
   passCount++;
+  console.log(`  ✅ ${msg}`);
 }
 
-function fail(label: string, detail?: string) {
-  console.log(`  FAIL  ${label}${detail ? ` (${detail})` : ""}`);
-  failCount++;
-}
-
-function assertEq(label: string, expected: unknown, actual: unknown) {
+function assertEq<T>(msg: string, expected: T, actual: T): void {
   if (expected === actual) {
-    pass(label);
+    passCount++;
+    console.log(`  ✅ ${msg} (${actual})`);
   } else {
-    fail(label, `expected '${expected}', got '${actual}'`);
+    failCount++;
+    console.log(`  ❌ ${msg}: expected '${expected}', got '${actual}'`);
   }
 }
 
-// --- Helpers --------------------------------------------------------------
+// --- PG helpers -----------------------------------------------------------
+
+const pgBinary = resolve(ROOT, "pgmigrate");
 
 async function runPgmigrate(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawnSync([resolve(ROOT, "pgmigrate"), ...args], {
+  const proc = Bun.spawnSync([pgBinary, ...args], {
     cwd: MIGRATIONS_DIR,
     env: { ...process.env },
   });
@@ -63,23 +70,23 @@ async function runPgmigrate(args: string[]): Promise<{ stdout: string; stderr: s
   };
 }
 
-async function waitForPostgres(maxSec = 30): Promise<void> {
-  for (let i = 0; i < maxSec; i++) {
-    const sql = postgres(PG_URI, { connect_timeout: 2 });
+function connect(db = PG_DB): Sql {
+  const uri = `postgres://${PG_USER}@localhost:${PORT}/${db}`;
+  return postgres(uri);
+}
+
+async function waitForPostgres(): Promise<void> {
+  for (let i = 0; i < 30; i++) {
     try {
+      const sql = connect();
       await sql`SELECT 1`;
       await sql.end();
       return;
     } catch {
-      await sql.end().catch(() => {});
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
-  throw new Error("PostgreSQL did not become ready within timeout");
-}
-
-function connect(db = PG_DB) {
-  return postgres(`postgres://${PG_USER}@localhost:${PORT}/${db}`);
+  throw new Error("PostgreSQL did not become ready in time");
 }
 
 async function cleanup(): Promise<void> {
@@ -118,49 +125,67 @@ assertEq("forward migration completed", 0, fwd.exitCode);
 
 const sql1 = connect();
 try {
-  const [{ exists: tableExists }] = await sql1`
+  const { exists: tableExists } = first<{ exists: boolean }>(
+    await sql1`
     SELECT EXISTS (
       SELECT FROM information_schema.tables
       WHERE table_name = 'users'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("table users exists", true, tableExists);
 
-  const [{ exists: colExists }] = await sql1`
+  const { exists: colExists } = first<{ exists: boolean }>(
+    await sql1`
     SELECT EXISTS (
       SELECT FROM information_schema.columns
       WHERE table_name = 'users' AND column_name = 'name'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("column name exists", true, colExists);
 
-  const [{ count }] = await sql1`SELECT COUNT(*)::int AS count FROM users`;
+  const { count } = first<{ count: number }>(
+    await sql1`SELECT COUNT(*)::int AS count FROM users`,
+  );
   assertEq("2 users", 2, count);
 
-  const [{ email: aliceEmail }] = await sql1`SELECT email FROM users WHERE name = 'Alice'`;
+  const { email: aliceEmail } = first<{ email: string }>(
+    await sql1`SELECT email FROM users WHERE name = 'Alice'`,
+  );
   assertEq("alice@test.com", "alice@test.com", aliceEmail);
 
-  const [{ email: bobEmail }] = await sql1`SELECT email FROM users WHERE name = 'Bob'`;
+  const { email: bobEmail } = first<{ email: string }>(
+    await sql1`SELECT email FROM users WHERE name = 'Bob'`,
+  );
   assertEq("bob@test.com", "bob@test.com", bobEmail);
 
-  const [{ exists: roleExists }] = await sql1`
+  const { exists: roleExists } = first<{ exists: boolean }>(
+    await sql1`
     SELECT EXISTS (
       SELECT FROM pg_roles WHERE rolname = 'e2e_reader'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("role e2e_reader exists", true, roleExists);
 
-  const [{ count: logCount }] = await sql1`SELECT COUNT(*)::int AS count FROM _migrations`;
+  const { count: logCount } = first<{ count: number }>(
+    await sql1`SELECT COUNT(*)::int AS count FROM _migrations`,
+  );
   assertEq("tracking log: 6 rows", 6, logCount);
 
-  const [{ dirty }] = await sql1`
+  const { dirty } = first<{ dirty: boolean }>(
+    await sql1`
     SELECT dirty FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("latest row clean", false, dirty);
 
-  const [{ version }] = await sql1`
+  const { version } = first<{ version: string }>(
+    await sql1`
     SELECT version FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("latest version 02", "20260612T0000-02", version);
 } finally {
   await sql1.end();
@@ -177,7 +202,9 @@ assertEq("exit code 0", 0, noop.exitCode);
 
 const sql2 = connect();
 try {
-  const [{ count: logCount }] = await sql2`SELECT COUNT(*)::int AS count FROM _migrations`;
+  const { count: logCount } = first<{ count: number }>(
+    await sql2`SELECT COUNT(*)::int AS count FROM _migrations`,
+  );
   assertEq("tracking log unchanged", 6, logCount);
 } finally {
   await sql2.end();
@@ -188,44 +215,62 @@ try {
 // ==========================================================================
 console.log("\n=== Test 3: Rollback 02→00 ===");
 
-const rb = await runPgmigrate(["--from", "20260612T0000-02", "--to", "20260612T0000-00", PG_URI]);
+const rb = await runPgmigrate([
+  "--from",
+  "20260612T0000-02",
+  "--to",
+  "20260612T0000-00",
+  PG_URI,
+]);
 assertEq("rollback completed", 0, rb.exitCode);
 
 const sql3 = connect();
 try {
-  const [{ exists: roleExists }] = await sql3`
+  const { exists: roleExists } = first<{ exists: boolean }>(
+    await sql3`
     SELECT EXISTS (
       SELECT FROM pg_roles WHERE rolname = 'e2e_reader'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("role e2e_reader removed", false, roleExists);
 
-  const [{ exists: colExists }] = await sql3`
+  const { exists: colExists } = first<{ exists: boolean }>(
+    await sql3`
     SELECT EXISTS (
       SELECT FROM information_schema.columns
       WHERE table_name = 'users' AND column_name = 'name'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("column name removed", false, colExists);
 
-  const [{ exists: tableExists }] = await sql3`
+  const { exists: tableExists } = first<{ exists: boolean }>(
+    await sql3`
     SELECT EXISTS (
       SELECT FROM information_schema.tables WHERE table_name = 'users'
     ) AS exists
-  `;
+  `,
+  );
   assertEq("table users still exists", true, tableExists);
 
-  const [{ version }] = await sql3`
+  const { version } = first<{ version: string }>(
+    await sql3`
     SELECT version FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("latest version 00", "20260612T0000-00", version);
 
-  const [{ dirty }] = await sql3`
+  const { dirty } = first<{ dirty: boolean }>(
+    await sql3`
     SELECT dirty FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("latest row clean", false, dirty);
 
-  const [{ count: logCount }] = await sql3`SELECT COUNT(*)::int AS count FROM _migrations`;
+  const { count: logCount } = first<{ count: number }>(
+    await sql3`SELECT COUNT(*)::int AS count FROM _migrations`,
+  );
   assertEq("tracking log: 10 rows", 10, logCount);
 } finally {
   await sql3.end();
@@ -247,14 +292,20 @@ try {
 }
 
 const dirty = await runPgmigrate(["--to", "20260612T0000-02", PG_URI]);
-assertEq("migration blocked by dirty flag", true, dirty.stdout.toLowerCase().includes("dirty"));
+assertEq(
+  "migration blocked by dirty flag",
+  true,
+  dirty.stdout.toLowerCase().includes("dirty"),
+);
 assertEq("exit code 1", 1, dirty.exitCode);
 
 const sql4b = connect();
 try {
-  const [{ dirty: dirtyFlag }] = await sql4b`
+  const { dirty: dirtyFlag } = first<{ dirty: boolean }>(
+    await sql4b`
     SELECT dirty FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("dirty flag persists", true, dirtyFlag);
 } finally {
   await sql4b.end();
@@ -275,19 +326,28 @@ try {
 // ==========================================================================
 console.log("\n=== Test 5: Force recovery ===");
 
-const force = await runPgmigrate(["--to", "20260612T0000-01", "--force", PG_URI]);
+const force = await runPgmigrate([
+  "--to",
+  "20260612T0000-01",
+  "--force",
+  PG_URI,
+]);
 assertEq("force recovery completed", 0, force.exitCode);
 
 const sql5 = connect();
 try {
-  const [{ dirty: dirtyFlag }] = await sql5`
+  const { dirty: dirtyFlag } = first<{ dirty: boolean }>(
+    await sql5`
     SELECT dirty FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("dirty flag cleared", false, dirtyFlag);
 
-  const [{ version }] = await sql5`
+  const { version } = first<{ version: string }>(
+    await sql5`
     SELECT version FROM _migrations ORDER BY applied_at DESC LIMIT 1
-  `;
+  `,
+  );
   assertEq("version set to 01", "20260612T0000-01", version);
 } finally {
   await sql5.end();
@@ -304,8 +364,12 @@ console.log("\n=== Test 6: Fresh database ===\n");
 const sql6 = connect();
 try {
   // Drop any leftover objects from prior tests that could conflict
-  try { await sql6`DROP OWNED BY e2e_reader CASCADE`; } catch {}
-  try { await sql6`DROP ROLE IF EXISTS e2e_reader`; } catch {}
+  try {
+    await sql6`DROP OWNED BY e2e_reader CASCADE`;
+  } catch {}
+  try {
+    await sql6`DROP ROLE IF EXISTS e2e_reader`;
+  } catch {}
 
   await sql6`CREATE DATABASE ${sql6(PG_FRESH_DB)}`;
   pass("fresh database created");
@@ -316,17 +380,23 @@ try {
 
   const sqlFresh = connect(PG_FRESH_DB);
   try {
-    const [{ exists: tableExists }] = await sqlFresh`
+    const { exists: tableExists } = first<{ exists: boolean }>(
+      await sqlFresh`
       SELECT EXISTS (
         SELECT FROM information_schema.tables WHERE table_name = 'users'
       ) AS exists
-    `;
+    `,
+    );
     assertEq("fresh: table exists", true, tableExists);
 
-    const [{ count }] = await sqlFresh`SELECT COUNT(*)::int AS count FROM users`;
+    const { count } = first<{ count: number }>(
+      await sqlFresh`SELECT COUNT(*)::int AS count FROM users`,
+    );
     assertEq("fresh: 2 users", 2, count);
 
-    const [{ count: logCount }] = await sqlFresh`SELECT COUNT(*)::int AS count FROM _migrations`;
+    const { count: logCount } = first<{ count: number }>(
+      await sqlFresh`SELECT COUNT(*)::int AS count FROM _migrations`,
+    );
     assertEq("fresh: tracking log 6 rows", 6, logCount);
   } finally {
     await sqlFresh.end();
